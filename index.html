@@ -1,0 +1,192 @@
+!doctype html
+html lang=en
+head
+meta charset=utf-8 
+meta name=viewport content=width=device-width,initial-scale=1 
+titleBrowser WebGPU Image Generator (No Python)title
+style
+  body{font-familyInter,system-ui,Segoe UI,Roboto,Arial;background#081018;color#eef2ff;margin0;padding18px}
+  .panel{max-width980px;margin18px auto;background#07111a;padding18px;border-radius12px;border1px solid rgba(255,255,255,0.03)}
+  h1{margin0 0 8px;font-size20px}
+  label{displayblock;font-size13px;color#94a3b8;margin-top10px}
+  textarea,input,select{width100%;padding10px;border-radius8px;border1px solid rgba(255,255,255,0.04);background#06141d;color#e6eef8}
+  .row{displayflex;gap10px}
+  .col{flex1}
+  button{margin-top12px;padding10px 14px;border-radius10px;bordernone;background#2563eb;colorwhite;font-weight600;cursorpointer}
+  .gallery{displaygrid;grid-template-columnsrepeat(auto-fit,minmax(220px,1fr));gap12px;margin-top12px}
+  .tile{background#07141b;padding8px;border-radius10px;border1px solid rgba(255,255,255,0.02)}
+  .muted{color#8b9bb3;font-size13px}
+  .note{background#04202a;padding8px;border-radius8px;margin-top12px}
+style
+head
+body
+  div class=panel
+    h1Browser WebGPU Image Generator (No Python)h1
+    div class=mutedThis page is a ready-to-use UI. It uses strongin-browser WebGPU  WebAssemblystrong model runtimes — no Python, no remote API. Read the notes below for requirements and how to wire a model runtime.div
+
+    label for=promptPromptlabel
+    textarea id=prompt rows=3 placeholder=A cinematic photo of a red motorcycle at sunset, ultra-detailedtextarea
+
+    label for=negNegative prompt (optional)label
+    input id=neg placeholder=blurry, low quality 
+
+    div class=row style=margin-top8px
+      div class=col
+        label for=widthWidthlabel
+        input id=width type=number value=512 
+      div
+      div class=col
+        label for=heightHeightlabel
+        input id=height type=number value=512 
+      div
+    div
+
+    div class=row
+      div class=col
+        label for=stepsStepslabel
+        input id=steps type=number value=20 
+      div
+      div class=col
+        label for=cfgCFG Scalelabel
+        input id=cfg type=number value=7.0 step=0.5 
+      div
+    div
+
+    button id=genGenerate in browser (WebGPU)button
+
+    div class=note id=statusStatus emmodel not loadedemdiv
+
+    div class=gallery id=gallerydiv
+
+    div style=margin-top12px class=muted
+      strongImportantstrong
+      ul
+        liYour browser must support strongWebGPUstrong (ChromeEdge Canary or latest builds with webgpu enabled). Mobile browsers usually don't support it yet.li
+        liYou will need a WebGPU-capable model runtime (examples emdiffusers.jsem, emstable-diffusion-webgpuem, or em@xenovatransformersem browser pipelines). This page provides the UI and hooks — you must plug a runtime script (see comments in the code).li
+        liModel files (weights) must be downloaded and accessible to the page (local files or a local server). Large models (several GB) are required for top quality.li
+      ul
+    div
+
+  div
+
+script
+ -------------- QUICK SUMMARY --------------
+ This file provides a complete in-browser UI for text-image generation.
+ It intentionally does NOT bundle a heavy model runtime to keep the file small.
+ Instead, it exposes two functions you must provide by including a WebGPU model
+ library (see instructions below)
+   async function loadModel(options) { ... }
+   async function generateImage(prompt, options) { ... }
+ After you include a compatible runtime (diffusers.js, xenova transformers, or
+ stable-diffusion-webgpu), implement those two functions and this UI will work.
+
+ ----------------- UI HANDLERS -----------------
+const status = document.getElementById('status');
+const gen = document.getElementById('gen');
+const gallery = document.getElementById('gallery');
+
+let modelLoaded = false;
+let runtimeOptions = {  place for runtime options like model path, scheduler  };
+
+async function showStatus(t){ status.innerHTML = 'Status em'+t+'em'; }
+
+ This is a user-implementable hook. If you include a runtime that exposes
+ browser-side loadgenerate functions, map them here.
+ Example with diffusers.js or xenova implement loadModel() and generateImage()
+ following their API and return an image Blob or dataURL from generateImage.
+
+async function loadModelStub(){
+   Placeholder the UI will still work, but you must replace this function
+   by including your chosen runtime and wiring it here.
+  showStatus('NO RUNTIME - include a WebGPU runtime and call loadModel()');
+  return false;
+}
+
+async function generateImageStub(prompt, opts){
+   Placeholder returns a simple placeholder image so UI can be tested.
+  const canvas = document.createElement('canvas');
+  canvas.width = opts.width; canvas.height = opts.height;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#072232'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#bcd4ff'; ctx.font = '18px sans-serif';
+  ctx.fillText('Placeholder image', 12, 30);
+  ctx.fillText(prompt.slice(0,60), 12, 60);
+  return await new Promise(r = canvas.toBlob(r,'imagepng'));
+}
+
+ Public functions the user should replace with an actual runtime's functions.
+ If you load a runtime script, reassign these functions. Example
+ window.loadModel = async () = { await Diffusers.load(...); return true; }
+ window.generateImage = async (p, opts) = { return await Diffusers.generate(...); }
+
+window.loadModel = window.loadModel  loadModelStub;
+window.generateImage = window.generateImage  generateImageStub;
+
+async function ensureModel(){
+  if(modelLoaded) return true;
+  showStatus('Loading model...');
+  try{
+    const ok = await window.loadModel(runtimeOptions);
+    if(ok){ modelLoaded = true; showStatus('Model loaded'); return true; }
+    showStatus('Model not loaded (runtime returned false)');
+    return false;
+  }catch(e){ showStatus('Model load failed '+e.message); console.error(e); return false; }
+}
+
+function addTileFromBlob(blob){
+  const url = URL.createObjectURL(blob);
+  const tile = document.createElement('div'); tile.className='tile';
+  const img = document.createElement('img'); img.src=url; img.style.width='100%';
+  tile.appendChild(img);
+  const a = document.createElement('a'); a.href=url; a.download='image.png'; a.textContent='Download'; a.style.display='inline-block'; a.style.marginTop='6px'; a.style.color='#bfe1ff';
+  tile.appendChild(a);
+  gallery.prepend(tile);
+}
+
+gen.addEventListener('click', async ()={
+  const prompt = document.getElementById('prompt').value.trim();
+  const neg = document.getElementById('neg').value.trim();
+  const width = parseInt(document.getElementById('width').value512,10);
+  const height = parseInt(document.getElementById('height').value512,10);
+  const steps = parseInt(document.getElementById('steps').value20,10);
+  const cfg = parseFloat(document.getElementById('cfg').value7.0);
+  if(!prompt){ alert('Please enter a prompt'); return; }
+
+  gen.disabled = true; showStatus('Preparing...');
+  const ok = await ensureModel();
+  if(!ok){ gen.disabled = false; return; }
+
+  showStatus('Generating image... this may take a while');
+  try{
+    const blob = await window.generateImage(prompt, {negative_prompt neg, width, height, steps, guidance_scale cfg});
+    if(blob){ addTileFromBlob(blob); showStatus('Done'); }
+    else showStatus('Runtime returned no image');
+  }catch(e){ showStatus('Generation error '+e.message); console.error(e); }
+  gen.disabled = false;
+});
+
+ ---------------- INTEGRATION NOTES ----------------
+ To make this page actually generate images you must include a browser runtime
+ and wire its functions to window.loadModel and window.generateImage. Here are
+ common options (pick one)
+ 1) diffusers.js (Hugging Face  community port) provides pipelines that run
+    in-browser via WebGPUWASM. Include the runtime JS and load a WebGPU model.
+ 2) @xenovatransformers (Xenova) supports some text-image pipelines in browser.
+ 3) stable-diffusion-webgpu (community projects) compiled runtimes for browsers.
+ Each runtime has example code that you can adapt. Typically you'll
+   - download the model files (ONNXwasmfloat16 blobs)
+   - host them on a local static server or place them next to this file
+   - call the runtime's load() with the model path
+   - call the runtime's generate() with prompt+settings and get an image blob
+
+ Example (pseudo)
+ window.loadModel = async () = { await Diffusers.load('modelssd-2-1'); return true; }
+ window.generateImage = async (prompt, opts) = { return await Diffusers.generateToBlob(prompt, opts); }
+
+ If you want, tell me which runtime you'd like (diffusers.js, xenova, or
+ a specific WebGPU project) and I will produce the exact integration code
+ (including script tags and model-hosting instructions).
+
+script
+body
+html
